@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sap-finance-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: sap_finance
+      POSTGRES_PASSWORD: sap_finance_password
+      POSTGRES_DB: sap_finance_ai
+
+    ports:
+      - "5435:5432"
+
+    volumes:
+      - sap_finance_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sap_finance -d sap_finance_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sap_finance_postgres_data:
