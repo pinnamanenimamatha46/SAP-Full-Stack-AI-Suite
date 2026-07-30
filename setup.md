@@ -2137,8 +2137,667 @@ $created | Format-List
 $id = $created.id
 $id
 
+## update record
+$updated = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$id" `
+    -Method Put `
+    -ContentType "application/json" `
+    -Body '{
+        "company_code": "US01",
+        "document_number": "INV-2026-2001-UPDATED",
+        "fiscal_year": 2026,
+        "transaction_type": "vendor_invoice",
+        "amount": 15000.00,
+        "currency": "USD"
+    }'
+
+$updated | Format-List
+
+## test GET and DELETE
+## Get updated Record:
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$id" `
+    -Method Get |
+Format-List
+
+## List all finance analyses
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Get |
+Format-Table id, company_code, document_number, amount, currency, status
+
+## Delete record ID 4
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$id" `
+    -Method Delete
+
+## Verify the record was deleted
+try {
+    Invoke-RestMethod `
+        -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$id" `
+        -Method Get
+}
+catch {
+    $_.ErrorDetails.Message
+}
+
+## add automated API tests:
+## code tests\test_finance_api.py
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
 
 
+def test_create_finance_analysis() -> None:
+    response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-INV-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 12500.75,
+            "currency": "USD",
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["company_code"] == "US01"
+    assert data["document_number"] == "TEST-INV-1001"
+    assert data["amount"] == "12500.75"
+    assert data["risk_level"] == "medium"
+    assert data["status"] == "completed"
+
+
+def test_list_finance_analyses() -> None:
+    response = client.get("/api/v1/finance/analyses")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_finance_analysis_not_found() -> None:
+    response = client.get("/api/v1/finance/analyses/999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Finance analysis not found",
+    }
+
+## Run
+uv run pytest -v
+5 passed, 1 warning in 1.29s 
+
+## Run
+uv run ruff check app tests
+All checks passed!
+
+## git status
+## git add sap-finance-ai-platform
+## git commit -m "Add finance analysis CRUD API and tests"
+## git push origin main
+## git status
+
+### add automated tests for Update and Delete:
+## code tests\test_finance_api.py
+def test_update_finance_analysis() -> None:
+    create_response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-UPDATE-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 10000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    analysis_id = create_response.json()["id"]
+
+    update_response = client.put(
+        f"/api/v1/finance/analyses/{analysis_id}",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-UPDATE-1001-UPDATED",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 15000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    data = update_response.json()
+
+    assert data["id"] == analysis_id
+    assert data["document_number"] == "TEST-UPDATE-1001-UPDATED"
+    assert data["amount"] == "15000.00"
+
+
+def test_update_finance_analysis_not_found() -> None:
+    response = client.put(
+        "/api/v1/finance/analyses/999999",
+        json={
+            "company_code": "US01",
+            "document_number": "NOT-FOUND",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 1000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Finance analysis not found.",
+    }
+
+
+def test_delete_finance_analysis() -> None:
+    create_response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-DELETE-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 5000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    analysis_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/finance/analyses/{analysis_id}",
+    )
+
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    get_response = client.get(
+        f"/api/v1/finance/analyses/{analysis_id}",
+    )
+
+    assert get_response.status_code == 404
+
+
+def test_delete_finance_analysis_not_found() -> None:
+    response = client.delete(
+        "/api/v1/finance/analyses/999999",
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Finance analysis not found",
+    }
+
+## Run
+uv run pytest -v
+
+## Test-Path .env
+True
+
+## Run
+## uv run pytest -v
+5 passed, 1 warning in 1.29s
+## uv run ruff check app tests
+All checks passed!
+
+## Test-Path tests\test_finance_api.py
+True
+
+## Remove it
+Remove-Item tests\test_finance_api.py
+
+## Remove-Item tests -ErrorAction SilentlyContinue
+
+## code tests\test_finance_api.py
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
+
+
+def test_create_finance_analysis() -> None:
+    response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-INV-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 12500.75,
+            "currency": "USD",
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["company_code"] == "US01"
+    assert data["document_number"] == "TEST-INV-1001"
+    assert data["amount"] == "12500.75"
+    assert data["risk_level"] == "medium"
+    assert data["status"] == "completed"
+
+
+def test_list_finance_analyses() -> None:
+    response = client.get("/api/v1/finance/analyses")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_finance_analysis_not_found() -> None:
+    response = client.get("/api/v1/finance/analyses/999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Finance analysis not found",
+    }
+
+
+def test_update_finance_analysis() -> None:
+    create_response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-UPDATE-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 10000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    analysis_id = create_response.json()["id"]
+
+    update_response = client.put(
+        f"/api/v1/finance/analyses/{analysis_id}",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-UPDATE-1001-UPDATED",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 15000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    data = update_response.json()
+
+    assert data["document_number"] == "TEST-UPDATE-1001-UPDATED"
+    assert data["amount"] == "15000.00"
+
+
+def test_delete_finance_analysis() -> None:
+    create_response = client.post(
+        "/api/v1/finance/analyses",
+        json={
+            "company_code": "US01",
+            "document_number": "TEST-DELETE-1001",
+            "fiscal_year": 2026,
+            "transaction_type": "vendor_invoice",
+            "amount": 5000.00,
+            "currency": "USD",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    analysis_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/finance/analyses/{analysis_id}",
+    )
+
+    assert delete_response.status_code == 204
+
+    get_response = client.get(
+        f"/api/v1/finance/analyses/{analysis_id}",
+    )
+
+    assert get_response.status_code == 404
+
+## Run
+uv run pytest -v
+5 passed, 1 warning in 1.29s
+
+## uv run ruff check .
+All checks passed!
+
+## Run Ruff lint checks:
+uv run ruff check .
+All checks passed!
+
+## Automatically fix safe linting issues:
+uv run ruff check . --fix
+All checks passed!
+
+## Check formatting:
+uv run ruff format --check .
+27 files already formatted
+
+## Format the project:
+uv run ruff format .
+27 files left unchanged
+
+## Run
+uv run pytest -v
+5 passed, 1 warning in 1.28s
+
+## verify that it doesn't affect functionality:
+uv run pytest -v -W ignore::DeprecationWarning
+5 passed, 1 warning in 1.15s 
+
+## git status
+## git add .
+## git commit -m "Complete SAP Finance AI Platform CRUD API with tests and code quality"
+## git push
+
+## Remove-Item -Recurse -Force .\tests
+
+## git restore tests
+## git status
+## uv run pytest -v
+5 passed, 1 warning in 1.5
+
+## Phase 2 – Dockerize the Application
+
+## code Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+
+RUN pip install uv \
+    && uv pip install --system .
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+## code .dockerignore
+services:
+  postgres:
+    image: postgres:17
+    container_name: sap-finance-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: sap_finance
+      POSTGRES_USER: sap_user
+      POSTGRES_PASSWORD: sap_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+
+    container_name: sap-finance-api
+
+    depends_on:
+      - postgres
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://sap_user:sap_password@postgres:5432/sap_finance
+
+volumes:
+  postgres_data:
+
+## code docker-compose.yaml
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sap-finance-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: sap_finance
+      POSTGRES_PASSWORD: sap_finance_password
+      POSTGRES_DB: sap_finance_ai
+
+    ports:
+      - "5435:5432"
+
+    volumes:
+      - sap_finance_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U sap_finance -d sap_finance_ai",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: sap-finance-api
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://sap_finance:sap_finance_password@postgres:5432/sap_finance_ai
+
+volumes:
+  sap_finance_postgres_data:
+
+## Build the containers
+## docker compose config
+## docker compose build
+## Start PostgreSQL and the API:
+docker compose up -d
+## container status:
+## docker compose ps
+sap-finance-postgres
+sap-finance-api
+## View API logs:
+docker compose logs api
+
+Test the API:
+Invoke-RestMethod http://127.0.0.1:8000/
+
+## docker compose -f compose.yaml down
+
+## Remove-Item .\compose.yaml
+
+## docker compose config
+
+## Run: docker compose up -d --build
+
+## verify: docker compose ps
+
+## verify API startup logs: docker compose logs api
+
+## test the root endpoint: 
+Invoke-RestMethod http://127.0.0.1:8000/ |
+Format-List
+
+## Tesy Health
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/health |
+Format-List
+
+## Step 1 — Test Create Analysis
+
+POST /api/v1/finance/analyses
+Try it out
+{
+  "company_code": "US01",
+  "document_number": "INV-2026-1002",
+  "fiscal_year": 2026,
+  "transaction_type": "vendor_invoice",
+  "amount": 15000.50,
+  "currency": "USD"
+}
+Execute.
+
+## Test GET by ID
+GET /api/v1/finance/analyses/{analysis_id}
+try it out
+20
+executive
+
+## verify both containers
+docker compose ps
+
+## test the database-backed list endpoint:
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Get |
+Format-List
+
+## Save the Docker work to Git
+## git add sap-finance-ai-platform
+## git commit -m "Dockerize SAP Finance AI Platform"
+## git push origin main
+
+## New-Item -ItemType Directory -Force .github\workflows
+
+## code .github\workflows\sap-finance-ci.yml
+
+name: SAP Finance AI CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "sap-finance-ai-platform/**"
+      - ".github/workflows/sap-finance-ci.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "sap-finance-ai-platform/**"
+      - ".github/workflows/sap-finance-ci.yml"
+
+jobs:
+  quality-and-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sap-finance-ai-platform
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Run Ruff lint
+        run: uv run ruff check .
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Run tests
+        run: uv run pytest -v
+
+  docker-build:
+    runs-on: ubuntu-latest
+
+    needs: quality-and-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t sap-finance-ai-platform:ci ./sap-finance-ai-platform
+
+## Verify the workflow file:
+Get-Content .github\workflows\sap-finance-ci.yml
+
+## git add .github/workflows/sap-finance-ci.yml
+## git add sap-finance-ai-platform/Dockerfile
+## git add sap-finance-ai-platform/docker-compose.yml
+## git add sap-finance-ai-platform/.dockerignore
+
+## verify:
+git status
+## git commit -m "Add CI workflow for SAP Finance AI Platform"
+## git push origin main
+
+## open your GitHub repository and select the Actions tab
+## Add CI workflow for SAP Finance AI Platform
+SAP Finance AI CI #1: Commit a241be3 pushed by pinnamanenimamatha46
+
+cd C:\projects\SAP-Full-Stack-AI-Suite\sap-finance-ai-platform
+
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -v
+docker build -t sap-finance-ai-platform:local .
+
+## git add .github/workflows/sap-finance-ci.yml
+## git status
+## git diff --cached --stat
+## git commit -m "Add Docker and CI for SAP Finance AI Platform"
+## git push origin main
+
+
+## cd C:\projects\SAP-Full-Stack-AI-Suite
+
+git status
+
+git add .github/workflows/sap-finance-ci.yml
+
+git commit -m "Configure SQLite database for Finance AI CI"
+
+git push origin main
 
 
 
