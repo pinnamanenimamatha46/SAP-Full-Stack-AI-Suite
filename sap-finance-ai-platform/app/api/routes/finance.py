@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
@@ -5,18 +7,22 @@ from app.db.session import get_db
 from app.schemas.finance_analysis import (
     FinanceAnalysisCreate,
     FinanceAnalysisResponse,
+    FinanceAnalysisUpdate,
 )
 from app.services.finance_service import (
     create_finance_analysis,
     delete_finance_analysis,
     get_finance_analysis,
     list_finance_analyses,
+    update_finance_analysis,
 )
 
 router = APIRouter(
     prefix="/finance",
     tags=["Finance"],
 )
+
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.post(
@@ -26,7 +32,7 @@ router = APIRouter(
 )
 def create_analysis(
     payload: FinanceAnalysisCreate,
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ) -> FinanceAnalysisResponse:
     return create_finance_analysis(
         db=db,
@@ -39,9 +45,9 @@ def create_analysis(
     response_model=list[FinanceAnalysisResponse],
 )
 def get_analyses(
+    db: DatabaseSession,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    db: Session = Depends(get_db),
 ) -> list[FinanceAnalysisResponse]:
     return list_finance_analyses(
         db=db,
@@ -56,7 +62,7 @@ def get_analyses(
 )
 def get_analysis(
     analysis_id: int,
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ) -> FinanceAnalysisResponse:
     record = get_finance_analysis(
         db=db,
@@ -72,13 +78,29 @@ def get_analysis(
     return record
 
 
+@router.put(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def update_analysis(
+    analysis_id: int,
+    payload: FinanceAnalysisUpdate,
+    db: DatabaseSession,
+) -> FinanceAnalysisResponse:
+    return update_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+        payload=payload,
+    )
+
+
 @router.delete(
     "/analyses/{analysis_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_analysis(
     analysis_id: int,
-    db: Session = Depends(get_db),
+    db: DatabaseSession,
 ) -> Response:
     deleted = delete_finance_analysis(
         db=db,
@@ -92,4 +114,3 @@ def delete_analysis(
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

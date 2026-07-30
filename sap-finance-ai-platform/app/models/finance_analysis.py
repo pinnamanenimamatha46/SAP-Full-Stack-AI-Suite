@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, String, Text, func
+from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -10,10 +10,14 @@ from app.db.base import Base
 class FinanceAnalysis(Base):
     __tablename__ = "finance_analyses"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     company_code: Mapped[str] = mapped_column(
-        String(20),
+        String(10),
         nullable=False,
         index=True,
     )
@@ -24,7 +28,10 @@ class FinanceAnalysis(Base):
         index=True,
     )
 
-    fiscal_year: Mapped[int] = mapped_column(nullable=False)
+    fiscal_year: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
 
     transaction_type: Mapped[str] = mapped_column(
         String(50),
@@ -39,7 +46,6 @@ class FinanceAnalysis(Base):
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="USD",
     )
 
     risk_level: Mapped[str] = mapped_column(
@@ -49,18 +55,19 @@ class FinanceAnalysis(Base):
     )
 
     status: Mapped[str] = mapped_column(
-        String(30),
+        String(20),
         nullable=False,
-        default="completed",
+        default="pending",
     )
 
-    findings: Mapped[str | None] = mapped_column(
+    findings: Mapped[str] = mapped_column(
         Text,
-        nullable=True,
+        nullable=False,
+        default="No findings available.",
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
         nullable=False,
+        server_default=func.now(),
     )
