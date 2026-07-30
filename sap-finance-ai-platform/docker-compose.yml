@@ -16,10 +16,32 @@ services:
       - sap_finance_postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sap_finance -d sap_finance_ai"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U sap_finance -d sap_finance_ai",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: sap-finance-api
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://sap_finance:sap_finance_password@postgres:5432/sap_finance_ai
 
 volumes:
   sap_finance_postgres_data:
