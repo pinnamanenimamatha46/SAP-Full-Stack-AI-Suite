@@ -8,4 +8,4 @@ api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(finance_router)
 
-## code app\api\v1\router.py                                                     
+## code app\api\v1\router.py

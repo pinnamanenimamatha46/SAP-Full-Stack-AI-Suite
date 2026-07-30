@@ -1429,10 +1429,713 @@ $created = Invoke-RestMethod `
 
 $created | Format-List
 
+## retrieve the exact ID returned:
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$($created.id)" `
+    -Method Get |
+Format-List
+
+## test - list endpoint:
+IInvoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Get |
+Format-Table id, company_code, document_number, amount, currency, risk_level, status
+
+## Test - Delete ID
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/3" `
+    -Method Delete
+
+## After deletion, verify:
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/3" `
+    -Method Get
+
+## Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Get |
+Format-Table id, company_code, document_number, amount, currency, risk_level, status
+
+## Retrieve 
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/2" `
+    -Method Get |
+Format-List
+
+## git status
+## git diff
+## git add .
+## git status
+## git commit -m "Complete SAP Finance AI Platform CRUD APIs with PostgreSQL"
+## git push origin main
+## git log --oneline -5
+
+### AI Risk Analysis Engine
+
+## Step 1: Update the Request Schema:
+
+## code app\schemas\finance_analysis.py
+
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import DateTime, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class FinanceAnalysis(Base):
+    __tablename__ = "finance_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    company_code: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    document_number: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    fiscal_year: Mapped[int] = mapped_column(nullable=False)
+
+    transaction_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default="USD",
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="low",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="completed",
+    )
+
+    findings: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+## code app/models/finance_analysis.py
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class FinanceAnalysis(Base):
+    __tablename__ = "finance_analyses"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    company_code: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        index=True,
+    )
+
+    document_number: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    fiscal_year: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    transaction_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="low",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="pending",
+    )
+
+    findings: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="No findings available.",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+## code verify your service function in:
+
+## code app/services/finance_service.py
+def create_finance_analysis(
+    db: Session,
+    payload: FinanceAnalysisCreate,
+) -> FinanceAnalysis:
+    analysis = FinanceAnalysis(
+        company_code=payload.company_code,
+        document_number=payload.document_number,
+        fiscal_year=payload.fiscal_year,
+        transaction_type=payload.transaction_type,
+        amount=payload.amount,
+        currency=payload.currency,
+        risk_level="medium",
+        status="completed",
+        findings="Finance transaction analysis completed.",
+    )
+
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return analysis
+
 ## 
+def create_finance_analysis(
+    db: Session,
+    payload: FinanceAnalysisCreate,
+) -> FinanceAnalysis:
+    analysis = FinanceAnalysis(
+        company_code=payload.company_code,
+        document_number=payload.document_number,
+        fiscal_year=payload.fiscal_year,
+        transaction_type=payload.transaction_type,
+        amount=payload.amount,
+        currency=payload.currency,
+        risk_level="medium",
+        status="completed",
+        findings="Finance transaction analysis completed.",
+    )
+
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return analysis
+
+### Implement the Update (PUT) endpoint
+
+## Step 1: Create the Update Schema
+
+## code app/schemas/finance_analysis.py: class below FinanceAnalysisCreate:
+
+class FinanceAnalysisUpdate(BaseModel):
+    company_code: str
+    document_number: str
+    fiscal_year: int
+    transaction_type: str
+    amount: Decimal
+    currency: str
+
+## Step 2: Add the Update Service
+
+## code app/services/finance_service.py
+
+from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+
+from app.models.finance_analysis import FinanceAnalysis
+from app.schemas.finance_analysis import (
+    FinanceAnalysisCreate,
+    FinanceAnalysisUpdate,
+)
 
 
+def create_finance_analysis(
+    db: Session,
+    payload: FinanceAnalysisCreate,
+) -> FinanceAnalysis:
+    analysis = FinanceAnalysis(
+        company_code=payload.company_code,
+        document_number=payload.document_number,
+        fiscal_year=payload.fiscal_year,
+        transaction_type=payload.transaction_type,
+        amount=payload.amount,
+        currency=payload.currency,
+        risk_level="medium",
+        status="completed",
+        findings="Finance transaction analysis completed.",
+    )
 
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return analysis
+
+
+def list_finance_analyses(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[FinanceAnalysis]:
+    return (
+        db.query(FinanceAnalysis)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_finance_analysis(
+    db: Session,
+    analysis_id: int,
+) -> FinanceAnalysis | None:
+    return db.get(FinanceAnalysis, analysis_id)
+
+
+def update_finance_analysis(
+    db: Session,
+    analysis_id: int,
+    payload: FinanceAnalysisUpdate,
+) -> FinanceAnalysis:
+    analysis = db.get(FinanceAnalysis, analysis_id)
+
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found.",
+        )
+
+    analysis.company_code = payload.company_code
+    analysis.document_number = payload.document_number
+    analysis.fiscal_year = payload.fiscal_year
+    analysis.transaction_type = payload.transaction_type
+    analysis.amount = payload.amount
+    analysis.currency = payload.currency
+
+    db.commit()
+    db.refresh(analysis)
+
+    return analysis
+
+
+def delete_finance_analysis(
+    db: Session,
+    analysis_id: int,
+) -> bool:
+    analysis = db.get(FinanceAnalysis, analysis_id)
+
+    if analysis is None:
+        return False
+
+    db.delete(analysis)
+    db.commit()
+
+    return True
+
+## code app/schemas/finance_analysis.py
+from datetime import datetime
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict
+
+
+class FinanceAnalysisCreate(BaseModel):
+    company_code: str
+    document_number: str
+    fiscal_year: int
+    transaction_type: str
+    amount: Decimal
+    currency: str
+
+
+class FinanceAnalysisUpdate(BaseModel):
+    company_code: str
+    document_number: str
+    fiscal_year: int
+    transaction_type: str
+    amount: Decimal
+    currency: str
+
+
+class FinanceAnalysisResponse(BaseModel):
+    id: int
+    company_code: str
+    document_number: str
+    fiscal_year: int
+    transaction_type: str
+    amount: Decimal
+    currency: str
+    risk_level: str
+    status: str
+    findings: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+## code app\api\routes\finance.py
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.schemas.finance_analysis import (
+    FinanceAnalysisCreate,
+    FinanceAnalysisResponse,
+    FinanceAnalysisUpdate,
+)
+from app.services.finance_service import (
+    create_finance_analysis,
+    delete_finance_analysis,
+    get_finance_analysis,
+    list_finance_analyses,
+    update_finance_analysis,
+)
+
+router = APIRouter(
+    prefix="/finance",
+    tags=["Finance"],
+)
+
+
+@router.post(
+    "/analyses",
+    response_model=FinanceAnalysisResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_analysis(
+    payload: FinanceAnalysisCreate,
+    db: Session = Depends(get_db),
+) -> FinanceAnalysisResponse:
+    return create_finance_analysis(
+        db=db,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/analyses",
+    response_model=list[FinanceAnalysisResponse],
+)
+def get_analyses(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[FinanceAnalysisResponse]:
+    return list_finance_analyses(
+        db=db,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def get_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+) -> FinanceAnalysisResponse:
+    record = get_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return record
+
+
+@router.put(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def update_analysis(
+    analysis_id: int,
+    payload: FinanceAnalysisUpdate,
+    db: Session = Depends(get_db),
+) -> FinanceAnalysisResponse:
+    return update_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/analyses/{analysis_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+) -> Response:
+    deleted = delete_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+## Run
+uv run ruff check app
+
+## code app\api\routes\finance.py
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.schemas.finance_analysis import (
+    FinanceAnalysisCreate,
+    FinanceAnalysisResponse,
+    FinanceAnalysisUpdate,
+)
+from app.services.finance_service import (
+    create_finance_analysis,
+    delete_finance_analysis,
+    get_finance_analysis,
+    list_finance_analyses,
+    update_finance_analysis,
+)
+
+router = APIRouter(
+    prefix="/finance",
+    tags=["Finance"],
+)
+
+DatabaseSession = Annotated[Session, Depends(get_db)]
+
+
+@router.post(
+    "/analyses",
+    response_model=FinanceAnalysisResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_analysis(
+    payload: FinanceAnalysisCreate,
+    db: DatabaseSession,
+) -> FinanceAnalysisResponse:
+    return create_finance_analysis(
+        db=db,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/analyses",
+    response_model=list[FinanceAnalysisResponse],
+)
+def get_analyses(
+    db: DatabaseSession,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[FinanceAnalysisResponse]:
+    return list_finance_analyses(
+        db=db,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def get_analysis(
+    analysis_id: int,
+    db: DatabaseSession,
+) -> FinanceAnalysisResponse:
+    record = get_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return record
+
+
+@router.put(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def update_analysis(
+    analysis_id: int,
+    payload: FinanceAnalysisUpdate,
+    db: DatabaseSession,
+) -> FinanceAnalysisResponse:
+    return update_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/analyses/{analysis_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_analysis(
+    analysis_id: int,
+    db: DatabaseSession,
+) -> Response:
+    deleted = delete_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+## code app\services\finance_service.py
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.models.finance_analysis import FinanceAnalysis
+from app.schemas.finance_analysis import (
+    FinanceAnalysisCreate,
+    FinanceAnalysisUpdate,
+)
+
+## uv run ruff check app --fix
+Found 1 error (1 fixed, 0 remaining)
+
+## uv run ruff check app
+All checks passed!
+
+## uv run python -c "from app.main import app; print(app.openapi()['paths'].keys())"
+dict_keys(['/api/v1/health', '/api/v1/finance/analyses', '/api/v1/finance/analyses/{analysis_id}', '/'])
+
+## start FastAPI
+uv run uvicorn app.main:app --reload
+
+
+## test the update endpoint
+$created = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body '{
+        "company_code": "US01",
+        "document_number": "INV-2026-2001",
+        "fiscal_year": 2026,
+        "transaction_type": "vendor_invoice",
+        "amount": 12500.75,
+        "currency": "USD"
+    }'
+
+$created | Format-List
+
+## 
+$updated = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$id" `
+    -Method Put `
+    -ContentType "application/json" `
+    -Body '{
+        "company_code": "US01",
+        "document_number": "INV-2026-2001-UPDATED",
+        "fiscal_year": 2026,
+        "transaction_type": "vendor_invoice",
+        "amount": 15000.00,
+        "currency": "USD"
+    }'
+
+$updated | Format-List
+
+## uv run uvicorn app.main:app --reload
+## verify server :
+ Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/health" `
+    -Method Get
+
+Remove old variable:
+Remove-Variable created, updated, id -ErrorAction SilentlyContinue
+
+## Create a new analysis:
+
+$created = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body '{
+        "company_code": "US01",
+        "document_number": "INV-2026-2001",
+        "fiscal_year": 2026,
+        "transaction_type": "vendor_invoice",
+        "amount": 12500.75,
+        "currency": "USD"
+    }'
+
+$created | Format-List
+
+## Save
+$id = $created.id
+$id
 
 
 

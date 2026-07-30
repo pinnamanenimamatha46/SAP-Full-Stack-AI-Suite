@@ -36,12 +36,7 @@ def list_finance_analyses(
     skip: int = 0,
     limit: int = 100,
 ) -> list[FinanceAnalysis]:
-    return (
-        db.query(FinanceAnalysis)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    return db.query(FinanceAnalysis).offset(skip).limit(limit).all()
 
 
 def get_finance_analysis(
@@ -90,4 +85,3 @@ def delete_finance_analysis(
     db.commit()
 
     return True
-
