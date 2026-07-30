@@ -3,7 +3,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
-
 engine_options: dict[str, object] = {
     "pool_pre_ping": True,
 }
