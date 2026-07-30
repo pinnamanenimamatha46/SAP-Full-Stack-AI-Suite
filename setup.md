@@ -827,4 +827,615 @@ APP_NAME=SAP Finance AI Platform
 APP_VERSION=0.1.0
 DATABASE_URL=postgresql+psycopg://sap_finance:sap_finance_password@localhost:5435/sap_finance_ai
 
-##  
+##  Run
+docker compose config
+
+## Start PostgreSQL
+
+    ## docker compose up -d
+
+## Check the container:
+## docker compose ps
+
+## test the database connection from your application.
+uv run python -c "from sqlalchemy import text; from app.db.session import engine; conn = engine.connect(); print(conn.execute(text('SELECT 1')).scalar()); conn.close()"
+1
+
+## verify the database name and user:
+docker exec sap-finance-postgres psql -U sap_finance -d sap_finance_ai -c "SELECT current_database(), current_user;"
+
+
+## init Albemic
+uv run alembic init alembic
+
+## connect Alembic to your application settings
+code alembic\env.py
+
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+
+from app.core.config import settings
+from app.db.base import Base
+
+config = context.config
+
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.database_url,
+)
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    url = config.get_main_option("sqlalchemy.url")
+
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+## code alembic.ini
+
+
+## check whether Alembic is already initialized:
+Test-Path alembic
+
+## Test the Alembic connection:
+uv run alembic current
+
+## verify Alembic can create an empty migration:
+uv run alembic revision -m "Initialize SAP finance database"
+
+##  uv run alembic upgrade head
+Initialize SAP finance database
+
+##  2i) create the first real database model and migration.
+
+## finance analysis model:
+
+## code app\models\finance_analysis.py
+
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import DateTime, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class FinanceAnalysis(Base):
+    __tablename__ = "finance_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    company_code: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    document_number: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    fiscal_year: Mapped[int] = mapped_column(nullable=False)
+
+    transaction_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(3),
+        nullable=False,
+        default="USD",
+    )
+
+    risk_level: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="low",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="completed",
+    )
+
+    findings: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+## Register the model with Alembic
+
+## code app\models\__init__.py
+from app.models.finance_analysis import FinanceAnalysis
+
+__all__ = ["FinanceAnalysis"]
+
+## open code alembic\env.py
+import app.models  # noqa: F401
+
+## Run Alembic detects the table
+uv run python -c "import app.models; from app.db.base import Base; print(Base.metadata.tables.keys())"
+
+dict_keys(['finance_analyses'])
+
+## uv run alembic current
+
+## uv run alembic heads
+
+## Generate the migration
+uv run alembic upgrade head
+
+## verify the database is at the latest revision:
+uv run alembic current
+
+## verify the table exists:
+@'
+from sqlalchemy import inspect
+from app.db.session import engine
+
+inspector = inspect(engine)
+print(inspector.get_table_names())
+'@ | uv run python
+
+## inspect the table columns
+
+## create the Pydantic schemas.
+## code app\schemas\finance_analysis.py
+
+from datetime import datetime
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class FinanceAnalysisCreate(BaseModel):
+    company_code: str = Field(min_length=1, max_length=20)
+    document_number: str = Field(min_length=1, max_length=50)
+    fiscal_year: int = Field(ge=2000, le=2100)
+    transaction_type: str = Field(min_length=1, max_length=50)
+    amount: Decimal = Field(gt=0, decimal_places=2)
+    currency: str = Field(min_length=3, max_length=3)
+    risk_level: str = Field(min_length=1, max_length=20)
+    status: str = Field(min_length=1, max_length=30)
+    findings: str | None = None
+
+
+class FinanceAnalysisResponse(FinanceAnalysisCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+
+## verify the schema imports correctly:
+uv run python -c "from app.schemas.finance_analysis import FinanceAnalysisCreate, FinanceAnalysisResponse; print(FinanceAnalysisCreate); print(FinanceAnalysisResponse)"
+
+## git status
+## git sdd .
+## git commit -m "Add PostgreSQL database and Alembic migrations for SAP Finance AI Platform"
+## git push origin main
+
+## Finance CRUD Service
+
+## code app/services/finance_service.py
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.finance_analysis import FinanceAnalysis
+from app.schemas.finance_analysis import FinanceAnalysisCreate
+
+
+def create_finance_analysis(
+    db: Session,
+    payload: FinanceAnalysisCreate,
+) -> FinanceAnalysis:
+    record = FinanceAnalysis(**payload.model_dump())
+
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    return record
+
+
+def list_finance_analyses(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[FinanceAnalysis]:
+    statement = (
+        select(FinanceAnalysis)
+        .order_by(FinanceAnalysis.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    return list(db.scalars(statement).all())
+
+
+def get_finance_analysis(
+    db: Session,
+    analysis_id: int,
+) -> FinanceAnalysis | None:
+    return db.get(FinanceAnalysis, analysis_id)
+
+
+def delete_finance_analysis(
+    db: Session,
+    analysis_id: int,
+) -> bool:
+    record = db.get(FinanceAnalysis, analysis_id)
+
+    if record is None:
+        return False
+
+    db.delete(record)
+    db.commit()
+
+    return True
+
+## erify the imports
+uv run python -c "from app.services.finance_service import create_finance_analysis, list_finance_analyses, get_finance_analysis, delete_finance_analysis; print('Finance service imports successfully')"
+
+Finance service imports successfully
+
+## Verify model filename
+## code app\models\finance_analysis.py
+
+## uv run python -c "from app.models.finance_analysis import FinanceAnalysis; print(FinanceAnalysis.__tablename__)"
+finance_analyses
+
+## code app\api\routes\finance.py
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.schemas.finance_analysis import (
+    FinanceAnalysisCreate,
+    FinanceAnalysisResponse,
+)
+from app.services.finance_service import (
+    create_finance_analysis,
+    delete_finance_analysis,
+    get_finance_analysis,
+    list_finance_analyses,
+)
+
+router = APIRouter(
+    prefix="/finance",
+    tags=["Finance"],
+)
+
+
+@router.post(
+    "/analyses",
+    response_model=FinanceAnalysisResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_analysis(
+    payload: FinanceAnalysisCreate,
+    db: Session = Depends(get_db),
+) -> FinanceAnalysisResponse:
+    return create_finance_analysis(
+        db=db,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/analyses",
+    response_model=list[FinanceAnalysisResponse],
+)
+def get_analyses(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[FinanceAnalysisResponse]:
+    return list_finance_analyses(
+        db=db,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/analyses/{analysis_id}",
+    response_model=FinanceAnalysisResponse,
+)
+def get_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+) -> FinanceAnalysisResponse:
+    record = get_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return record
+
+
+@router.delete(
+    "/analyses/{analysis_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+) -> Response:
+    deleted = delete_finance_analysis(
+        db=db,
+        analysis_id=analysis_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+
+## code app\db\session.py
+
+from collections.abc import Generator
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.config import settings
+
+
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 5},
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+
+## code app\db\session.py
+
+from collections.abc import Generator
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.config import settings
+
+
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 5},
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+
+## Register the finance router
+
+## code app\api\v1\router.py
+from fastapi import APIRouter
+
+from app.api.routes.finance import router as finance_router
+from app.api.routes.health import router as health_router
+
+api_router = APIRouter()
+
+api_router.include_router(health_router)
+api_router.include_router(finance_router)
+
+## test the import:
+uv run python -c "from app.main import app; print(list(app.openapi()['paths'].keys()))"
+
+## restart server: 
+
+## uv run uvicorn app.main:app --reload
+
+## verify the complete Finance API
+
+## verify all registered endpoints
+uv run python -c "from app.main import app; print(list(app.openapi()['paths'].keys()))"
+
+## http://127.0.0.1:8000/docs
+
+## Test the list endpoint
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/finance/analyses
+
+
+## Invoke-RestMethod
+
+$analyses = Invoke-RestMethod `
+    -Uri http://127.0.0.1:8000/api/v1/finance/analyses
+
+$analyses.Count
+0
+
+## display the raw JSON:
+Invoke-WebRequest `
+    -Uri http://127.0.0.1:8000/api/v1/finance/analyses |
+Select-Object -ExpandProperty Content
+[]
+
+## create the first analysis:
+
+## http://127.0.0.1:8000/docs
+
+## POST /api/v1/finance/analyses
+
+## Invoke-RestMethod `
+    -Uri http://127.0.0.1:8000/api/v1/finance/analyses |
+ConvertTo-Json -Depth 10
+
+##
+Invoke-RestMethod `
+    -Uri http://127.0.0.1:8000/api/v1/finance/analyses/<returned-id>
+
+## 
+$body = @{
+    company_code     = "US01"
+    document_number  = "INV-2026-1001"
+    fiscal_year      = 2026
+    transaction_type = "vendor_invoice"
+    amount           = 12500.75
+    currency         = "USD"
+    risk_level       = "medium"
+    status           = "completed"
+    findings         = "Invoice amount exceeds the normal vendor threshold."
+} | ConvertTo-Json
+
+$result = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+$result | Format-List
+
+## Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses/$($result.id)" `
+    -Method Get |
+Format-List
+
+## docker ps
+
+## Test db:docker ps
+docker exec -it sap-finance-postgres `
+    psql -U sap_finance -d sap_finance_ai
+
+## docker ps
+
+## Enter PostgreSQL: docker exec -it sap-finance-postgres psql -U sap_finance -d sap_finance_ai
+sap_finance_ai=# SELECT current_database(), current_user;
+\dt
+
+## sap_finance_ai=# SELECT * FROM finance_analyses;
+## \q
+
+## sap_finance_ai=# SELECT current_database(), current_user;
+## \dt
+
+## sap_finance_ai=# SELECT * FROM finance_analyses ORDER BY id;
+## sap_finance_ai=# \dt
+
+## create a finance analysis:
+
+$body = @{
+    company_code     = "US01"
+    document_number  = "INV-2026-1002"
+    fiscal_year      = 2026
+    transaction_type = "vendor_invoice"
+    amount           = 12500.75
+    currency         = "USD"
+    risk_level       = "medium"
+    status           = "completed"
+    findings         = "Invoice reviewed for financial risk."
+} | ConvertTo-Json
+
+$created = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/v1/finance/analyses" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+
+$created | Format-List
+
+## 
+
+
+
+
+
+
+
+
+
