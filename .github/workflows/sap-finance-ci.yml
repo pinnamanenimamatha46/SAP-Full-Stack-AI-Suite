@@ -19,6 +19,9 @@ jobs:
   quality-and-tests:
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: sqlite+pysqlite:///./test.db
+
     defaults:
       run:
         working-directory: sap-finance-ai-platform
