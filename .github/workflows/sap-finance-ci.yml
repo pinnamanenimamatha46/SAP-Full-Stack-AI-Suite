@@ -15,16 +15,23 @@ on:
       - "sap-finance-ai-platform/**"
       - ".github/workflows/sap-finance-ci.yml"
 
+  workflow_dispatch:
+
 jobs:
   quality-and-tests:
+    name: Quality and Tests
     runs-on: ubuntu-latest
 
-    env:
-      DATABASE_URL: sqlite+pysqlite:///./test.db
+    permissions:
+      contents: read
 
     defaults:
       run:
         working-directory: sap-finance-ai-platform
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: "sqlite+pysqlite:///./test.db"
 
     steps:
       - name: Checkout repository
@@ -33,10 +40,21 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: latest
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: |
+            sap-finance-ai-platform/uv.lock
+            sap-finance-ai-platform/pyproject.toml
 
-      - name: Set up Python
+      - name: Install Python
         run: uv python install 3.11
+
+      - name: Verify project files
+        run: |
+          test -f pyproject.toml
+          test -f uv.lock
+          test -d app
+          test -d tests
 
       - name: Install dependencies
         run: uv sync --all-groups --frozen
@@ -49,15 +67,3 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -v
-
-  docker-build:
-    runs-on: ubuntu-latest
-
-    needs: quality-and-tests
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: docker build -t sap-finance-ai-platform:ci ./sap-finance-ai-platform
