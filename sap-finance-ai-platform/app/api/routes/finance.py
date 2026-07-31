@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.security import get_current_user
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.finance_analysis import (
     FinanceAnalysisCreate,
     FinanceAnalysisResponse,
@@ -23,6 +25,7 @@ router = APIRouter(
 )
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post(
@@ -33,6 +36,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
 def create_analysis(
     payload: FinanceAnalysisCreate,
     db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> FinanceAnalysisResponse:
     return create_finance_analysis(
         db=db,
@@ -46,6 +50,7 @@ def create_analysis(
 )
 def get_analyses(
     db: DatabaseSession,
+    current_user: CurrentUser,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[FinanceAnalysisResponse]:
@@ -63,6 +68,7 @@ def get_analyses(
 def get_analysis(
     analysis_id: int,
     db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> FinanceAnalysisResponse:
     record = get_finance_analysis(
         db=db,
@@ -86,12 +92,21 @@ def update_analysis(
     analysis_id: int,
     payload: FinanceAnalysisUpdate,
     db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> FinanceAnalysisResponse:
-    return update_finance_analysis(
+    record = update_finance_analysis(
         db=db,
         analysis_id=analysis_id,
         payload=payload,
     )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finance analysis not found",
+        )
+
+    return record
 
 
 @router.delete(
@@ -101,6 +116,7 @@ def update_analysis(
 def delete_analysis(
     analysis_id: int,
     db: DatabaseSession,
+    current_user: CurrentUser,
 ) -> Response:
     deleted = delete_finance_analysis(
         db=db,

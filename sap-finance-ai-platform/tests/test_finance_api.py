@@ -1,8 +1,24 @@
 from fastapi.testclient import TestClient
 
+from app.core.security import get_current_user
 from app.main import app
+from app.models.user import User
 
 client = TestClient(app)
+
+
+def override_get_current_user() -> User:
+    return User(
+        id=1,
+        email="test@example.com",
+        username="testuser",
+        hashed_password="not-used-in-tests",
+        role="user",
+        is_active=True,
+    )
+
+
+app.dependency_overrides[get_current_user] = override_get_current_user
 
 
 def test_create_finance_analysis() -> None:

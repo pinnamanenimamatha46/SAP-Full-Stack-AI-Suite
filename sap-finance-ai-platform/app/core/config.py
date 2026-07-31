@@ -2,12 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = (
-        "postgresql+psycopg://sap_finance:"
-        "sap_finance_password@localhost:5435/sap_finance_ai"
-    )
+    app_name: str = "SAP Finance AI Platform"
+    database_url: str = "sqlite+pysqlite:///./sap_finance.db"
 
-    jwt_secret_key: str = "development-only-change-me"
+    secret_key: str = "change-this-secret-key-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
@@ -19,3 +17,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+## uv run python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+## uv run ruff check app\core\security.py app\core\config.py
+## uv run ruff format app\core\security.py app\core\config.py
