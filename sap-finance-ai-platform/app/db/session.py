@@ -1,36 +1,28 @@
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
-engine_options: dict[str, object] = {
-    "pool_pre_ping": True,
-}
+DATABASE_URL = settings.database_url
 
-if settings.database_url.startswith("sqlite"):
-    engine_options["connect_args"] = {
-        "check_same_thread": False,
-    }
-else:
-    engine_options["connect_args"] = {
-        "connect_timeout": 5,
-    }
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(
-    settings.database_url,
-    **engine_options,
+    DATABASE_URL,
+    connect_args=connect_args,
 )
 
 SessionLocal = sessionmaker(
-    bind=engine,
     autocommit=False,
     autoflush=False,
+    bind=engine,
 )
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
-
     try:
         yield db
     finally:
