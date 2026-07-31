@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.ai.risk_engine import calculate_risk
 from app.models.finance_analysis import FinanceAnalysis
 from app.schemas.finance_analysis import (
     FinanceAnalysisCreate,
@@ -12,6 +13,13 @@ def create_finance_analysis(
     db: Session,
     payload: FinanceAnalysisCreate,
 ) -> FinanceAnalysis:
+    risk_assessment = calculate_risk(
+        amount=payload.amount,
+        transaction_type=payload.transaction_type,
+        company_code=payload.company_code,
+        currency=payload.currency,
+    )
+
     analysis = FinanceAnalysis(
         company_code=payload.company_code,
         document_number=payload.document_number,
@@ -19,9 +27,9 @@ def create_finance_analysis(
         transaction_type=payload.transaction_type,
         amount=payload.amount,
         currency=payload.currency,
-        risk_level="medium",
+        risk_level=risk_assessment.risk_level,
         status="completed",
-        findings="Finance transaction analysis completed.",
+        findings=risk_assessment.explanation,
     )
 
     db.add(analysis)
@@ -59,12 +67,22 @@ def update_finance_analysis(
             detail="Finance analysis not found.",
         )
 
+    risk_assessment = calculate_risk(
+        amount=payload.amount,
+        transaction_type=payload.transaction_type,
+        company_code=payload.company_code,
+        currency=payload.currency,
+    )
+
     analysis.company_code = payload.company_code
     analysis.document_number = payload.document_number
     analysis.fiscal_year = payload.fiscal_year
     analysis.transaction_type = payload.transaction_type
     analysis.amount = payload.amount
     analysis.currency = payload.currency
+    analysis.risk_level = risk_assessment.risk_level
+    analysis.status = "completed"
+    analysis.findings = risk_assessment.explanation
 
     db.commit()
     db.refresh(analysis)

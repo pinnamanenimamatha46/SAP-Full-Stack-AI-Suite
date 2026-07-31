@@ -25,8 +25,9 @@ def test_create_finance_analysis() -> None:
     assert data["company_code"] == "US01"
     assert data["document_number"] == "TEST-INV-1001"
     assert data["amount"] == "12500.75"
-    assert data["risk_level"] == "medium"
+    assert data["risk_level"] == "low"
     assert data["status"] == "completed"
+    assert data["findings"] == "Transaction amount exceeds 10,000."
 
 
 def test_list_finance_analyses() -> None:
@@ -80,6 +81,8 @@ def test_update_finance_analysis() -> None:
 
     assert data["document_number"] == "TEST-UPDATE-1001-UPDATED"
     assert data["amount"] == "15000.00"
+    assert data["risk_level"] == "low"
+    assert data["findings"] == "Transaction amount exceeds 10,000."
 
 
 def test_delete_finance_analysis() -> None:
